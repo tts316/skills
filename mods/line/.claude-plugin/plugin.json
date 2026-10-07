@@ -1,0 +1,35 @@
+{
+  "name": "line",
+  "version": "0.1.0",
+  "description": "LINE 面板：從 Claude Code 傳訊息到你的 LINE（Messaging API），可讓 Claude 呼叫、任務完成時通知",
+  "author": {
+    "name": "tts316"
+  },
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "channelAccessToken": {
+      "type": "string",
+      "title": "LINE Channel access token",
+      "description": "LINE Developers 後台 Messaging API 頁籤的 Channel access token (long-lived)",
+      "default": ""
+    },
+    "to": {
+      "type": "string",
+      "title": "收件人 ID",
+      "description": "你的 LINE userId（Basic settings 頁籤的 Your user ID，U 開頭），或群組 ID",
+      "default": ""
+    },
+    "notifyOnTurnEnd": {
+      "type": "boolean",
+      "title": "任務完成通知",
+      "description": "Claude 完成一輪較長的工作時，自動傳 LINE 通知",
+      "default": false
+    },
+    "notifyAfterSeconds": {
+      "type": "number",
+      "title": "通知門檻（秒）",
+      "description": "只有執行超過這個秒數的工作才通知",
+      "default": 60
+    }
+  }
+}
