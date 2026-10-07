@@ -4,16 +4,25 @@ export type RawFolder = { path: string; name?: string }
 
 /** Strips // and /* *\/ comments and trailing commas, leaving strings intact. */
 export function stripJsonc(text: string): string {
+  return dropTrailingCommas(dropComments(text))
+}
+
+function scanString(text: string, i: number): number {
+  let j = i + 1
+  while (j < text.length && text[j] !== '"') j += text[j] === '\\' ? 2 : 1
+  return j + 1
+}
+
+function dropComments(text: string): string {
   let out = ''
   let i = 0
   const n = text.length
   while (i < n) {
     const c = text[i]
     if (c === '"') {
-      let j = i + 1
-      while (j < n && text[j] !== '"') j += text[j] === '\\' ? 2 : 1
-      out += text.slice(i, j + 1)
-      i = j + 1
+      const j = scanString(text, i)
+      out += text.slice(i, j)
+      i = j
     } else if (c === '/' && text[i + 1] === '/') {
       while (i < n && text[i] !== '\n') i++
     } else if (c === '/' && text[i + 1] === '*') {
@@ -24,7 +33,26 @@ export function stripJsonc(text: string): string {
       i++
     }
   }
-  return out.replace(/,(\s*[\]}])/g, '$1')
+  return out
+}
+
+function dropTrailingCommas(text: string): string {
+  let out = ''
+  let i = 0
+  while (i < text.length) {
+    const c = text[i]
+    if (c === '"') {
+      const j = scanString(text, i)
+      out += text.slice(i, j)
+      i = j
+    } else if (c === ',' && /^\s*[\]}]/.test(text.slice(i + 1))) {
+      i++
+    } else {
+      out += c
+      i++
+    }
+  }
+  return out
 }
 
 export function parseWorkspace(text: string): RawFolder[] {
@@ -57,16 +85,26 @@ export function basename(path: string): string {
   return trimmed.slice(Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\')) + 1)
 }
 
+/** Drops trailing separators but keeps a root (`/`, `C:\\`) whole. */
+export function trimSep(path: string): string {
+  if (/^[A-Za-z]:[\\/]*$/.test(path)) return path.slice(0, 2) + sepOf(path)
+  return path.replace(/[\\/]+$/, '') || path.slice(0, 1)
+}
+
 export function join(base: string, rel: string, sep = sepOf(base)): string {
-  const parts = (base.replace(/[\\/]+$/, '') + sep + rel).split(/[\\/]+/)
+  const isUnc = /^[\\/]{2}[^\\/]/.test(base)
+  const parts = (base + sep + rel).split(/[\\/]+/).filter(p => p !== '' && p !== '.')
+  // never climb above the root: a UNC share (server + share) or a drive letter
+  const floor = isUnc ? 2 : /^[A-Za-z]:$/.test(parts[0] ?? '') ? 1 : 0
   const out: string[] = []
   for (const p of parts) {
-    if (p === '.') continue
-    if (p === '..' && out.length > 1) out.pop()
-    else out.push(p)
+    if (p !== '..') out.push(p)
+    else if (out.length > floor) out.pop()
   }
   const joined = out.join(sep)
-  return base.startsWith('/') && !joined.startsWith('/') ? '/' + joined : joined || sep
+  if (isUnc) return sep + sep + joined
+  if (base.startsWith('/')) return '/' + joined
+  return /^[A-Za-z]:$/.test(joined) ? joined + sep : joined
 }
 
 /** Resolves a folder path from the workspace file the way VS Code does. */
@@ -75,7 +113,7 @@ export function resolveFolder(workspaceFile: string, folderPath: string, home?: 
     folderPath = decodeURIComponent(folderPath.slice(7)).replace(/^\/([A-Za-z]:)/, '$1')
   }
   if (home && /^~([\\/]|$)/.test(folderPath)) return join(home, folderPath.slice(2) || '.')
-  if (isAbsolute(folderPath)) return folderPath.replace(/[\\/]+$/, '') || folderPath
+  if (isAbsolute(folderPath)) return trimSep(folderPath)
   return join(dirname(workspaceFile), folderPath, sepOf(workspaceFile))
 }
 

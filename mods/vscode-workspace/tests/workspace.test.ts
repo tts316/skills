@@ -1,6 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 
-import { gitMarkOf, parseWorkspace, resolveFolder, workspaceTitle } from '../hooks/workspace'
+import { gitMarkOf, join, parseWorkspace, resolveFolder, workspaceTitle } from '../hooks/workspace'
 
 const SAMPLE = `{
   // 聯成系統開發
@@ -33,4 +33,19 @@ test('titles and git marks', () => {
   expect(gitMarkOf('')).toBe('clean')
   expect(gitMarkOf('?? new.txt\n')).toBe('untracked')
   expect(gitMarkOf(' M a.ts\n?? b.ts\n')).toBe('modified')
+})
+
+test('keeps commas inside strings', () => {
+  expect(parseWorkspace('{ "folders": [ { "path": "src,}", "name": "a,]" }, ] }')).toEqual([
+    { path: 'src,}', name: 'a,]' },
+  ])
+})
+
+test('keeps drive roots and UNC shares intact', () => {
+  expect(resolveFolder('D:\\ws\\a.code-workspace', 'C:\\')).toBe('C:\\')
+  expect(resolveFolder('D:\\ws\\a.code-workspace', 'file:///C:/')).toBe('C:/')
+  expect(resolveFolder('\\\\server\\share\\team.code-workspace', 'app')).toBe('\\\\server\\share\\app')
+  expect(resolveFolder('\\\\server\\share\\team.code-workspace', '..\\..\\x')).toBe('\\\\server\\share\\x')
+  expect(join('/w', 'team.code-workspace')).toBe('/w/team.code-workspace')
+  expect(join('/', '..')).toBe('/')
 })

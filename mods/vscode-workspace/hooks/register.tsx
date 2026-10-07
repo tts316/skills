@@ -5,6 +5,7 @@ import type { Entry, Folder, GitMark, Workspace } from '../types'
 import {
   basename,
   gitMarkOf,
+  isAbsolute,
   join,
   parseWorkspace,
   resolveFolder,
@@ -54,7 +55,8 @@ async function findWorkspaceFile($: EngineInterface): Promise<string | undefined
   return hit ? join(cwd, hit.name) : undefined
 }
 
-async function loadWorkspace($: EngineInterface, file: string): Promise<void> {
+/** Loads the workspace file into the pane; on failure clears it and returns the error. */
+async function loadWorkspace($: EngineInterface, file: string): Promise<string | undefined> {
   try {
     const text = await $.fs.read(file)
     const home = await homeDir($)
@@ -72,8 +74,13 @@ async function loadWorkspace($: EngineInterface, file: string): Promise<void> {
     await $.store.set(STORE_KEY, file).catch(() => undefined)
     // keep previously expanded folders open
     for (const path of await read($, expanded)) await loadChildren($, path)
+    return undefined
   } catch (err) {
-    await update($, error, () => `無法讀取工作區檔 ${file}：${(err as Error).message}`)
+    const message = `無法讀取工作區檔 ${file}：${(err as Error).message}`
+    // drop the previous workspace so the pane never shows stale folders under the error
+    await update($, workspace, () => null)
+    await update($, error, () => message)
+    return message
   }
 }
 
@@ -100,14 +107,15 @@ async function toggle($: EngineInterface, path: string): Promise<void> {
 async function openPane($: EngineInterface, args: string): Promise<string> {
   const given = args.trim().replace(/^["']|["']$/g, '')
   const file =
-    given ||
+    (given && (isAbsolute(given) ? given : join(await $.session.cwd(), given))) ||
     ((await $.store.get(STORE_KEY).catch(() => undefined)) as string | undefined) ||
     (await findWorkspaceFile($))
   if (!file) {
     return '找不到工作區檔。用法：/workspace <路徑/xxx.code-workspace>'
   }
-  await loadWorkspace($, file)
+  const failed = await loadWorkspace($, file)
   const opened = await $.ui.open({ id: PANE, title: '檔案總管' })
+  if (failed) return failed
   return opened.isPlaced
     ? `已開啟工作區：${workspaceTitle(file)}`
     : `工作區已載入，但面板尚未顯示（${opened.reason}）`
@@ -132,8 +140,8 @@ export const register: Register = on => {
   on('command.run', { command: 'workspace-refresh' }, async $ => {
     const ws = await read($, workspace)
     if (!ws) return { text: '尚未載入工作區，請先執行 /workspace' }
-    await loadWorkspace($, ws.file)
-    return { text: '工作區已重新整理' }
+    const failed = await loadWorkspace($, ws.file)
+    return { text: failed ?? '工作區已重新整理' }
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
