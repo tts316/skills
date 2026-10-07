@@ -1,0 +1,7 @@
+{
+  "name": "vscode-workspace",
+  "version": "0.1.0",
+  "author": { "name": "tts316" },
+  "description": "VS Code 風格的工作區總管側邊面板：直接讀取 .code-workspace 檔，樹狀瀏覽各資料夾並以 git 狀態上色",
+  "types": "./types/index.d.ts"
+}
