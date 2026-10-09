@@ -1,0 +1,3 @@
+interface:
+  display_name: "HyperFrames Video"
+  short_description: "Render videos from HTML with HyperFrames"
